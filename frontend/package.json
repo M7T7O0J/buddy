@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build && cp -r out/* ../goldenverba/server/frontend/out/ && rm -r out",
     "start": "next start -H 0.0.0.0 -p 8080",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
   },
   "dependencies": {
     "@mdx-js/mdx": "^2.3.0",

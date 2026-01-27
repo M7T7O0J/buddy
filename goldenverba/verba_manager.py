@@ -3,9 +3,31 @@ import importlib
 import math
 import json
 from datetime import datetime
+from typing import Optional
 
 from dotenv import load_dotenv
-from wasabi import msg
+
+try:
+    from wasabi import msg
+except ModuleNotFoundError:  # pragma: no cover
+    import logging
+
+    _logger = logging.getLogger("verba")
+
+    class _Msg:
+        def info(self, text: str) -> None:
+            _logger.info(text)
+
+        def warn(self, text: str) -> None:
+            _logger.warning(text)
+
+        def fail(self, text: str) -> None:
+            _logger.error(text)
+
+        def good(self, text: str) -> None:
+            _logger.info(text)
+
+    msg = _Msg()
 import asyncio
 
 from copy import deepcopy
@@ -53,28 +75,32 @@ class VerbaManager:
         self.verify_installed_libraries()
         self.verify_variables()
 
-    async def connect(self, credentials: Credentials, port: str = "8080"):
-        start_time = asyncio.get_event_loop().time()
-        try:
-            client = await self.weaviate_manager.connect(
-                credentials.deployment, credentials.url, credentials.key, port
-            )
-        except Exception as e:
-            raise e
-        if client:
-            initialized = await self.weaviate_manager.verify_collection(
-                client, self.weaviate_manager.config_collection_name
-            )
-            if initialized:
-                end_time = asyncio.get_event_loop().time()
-                msg.info(f"Connection time: {end_time - start_time:.2f} seconds")
-                return client
+    async def connect(
+        self, credentials: Credentials, port: str = "8080"
+    ) -> Optional[WeaviateAsyncClient]:
+        loop = asyncio.get_running_loop()
+        start_time = loop.time()
 
-    async def disconnect(self, client):
-        start_time = asyncio.get_event_loop().time()
+        client = await self.weaviate_manager.connect(
+            credentials.deployment, credentials.url, credentials.key, port
+        )
+        if not client:
+            return None
+
+        initialized = await self.weaviate_manager.verify_collection(
+            client, self.weaviate_manager.config_collection_name
+        )
+        if not initialized:
+            return None
+
+        msg.info(f"Connection time: {loop.time() - start_time:.2f} seconds")
+        return client
+
+    async def disconnect(self, client: WeaviateAsyncClient) -> bool:
+        loop = asyncio.get_running_loop()
+        start_time = loop.time()
         result = await self.weaviate_manager.disconnect(client)
-        end_time = asyncio.get_event_loop().time()
-        msg.info(f"Disconnection time: {end_time - start_time:.2f} seconds")
+        msg.info(f"Disconnection time: {loop.time() - start_time:.2f} seconds")
         return result
 
     async def get_deployments(self):
@@ -95,8 +121,9 @@ class VerbaManager:
     # Import
 
     async def import_document(
-        self, client, fileConfig: FileConfig, logger: LoggerManager = LoggerManager()
+        self, client, fileConfig: FileConfig, logger: Optional[LoggerManager] = None
     ):
+        logger = logger or LoggerManager()
         try:
             loop = asyncio.get_running_loop()
             start_time = loop.time()
