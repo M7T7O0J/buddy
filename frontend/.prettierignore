@@ -1,9 +1,0 @@
-node_modules
-.next
-out
-build
-coverage
-package-lock.json
-public/**/*.hdr
-public/**/*.glb
-public/**/*.gltf

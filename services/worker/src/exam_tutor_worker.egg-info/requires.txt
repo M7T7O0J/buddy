@@ -1,0 +1,13 @@
+rq>=2.0
+redis>=5.0
+httpx>=0.27
+psycopg[binary]>=3.2.0
+psycopg-pool>=3.2.2
+pgvector>=0.4.1
+pydantic>=2.6
+pydantic-settings>=2.2
+uuid6>=2024.7.10
+docling>=0.22.0
+transformers>=4.41.0
+exam-tutor-common
+exam-tutor-rag-core

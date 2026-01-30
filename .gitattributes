@@ -1,0 +1,15 @@
+* text=auto
+
+# Treat Python and JSON as text with LF normalization
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Binary artifacts
+*.pt binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
