@@ -1,94 +1,81 @@
----
-
 services:
-  verba:
+  db:
+    image: pgvector/pgvector:0.8.1-pg16-trixie
+    environment:
+      POSTGRES_DB: exam_tutor
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./infra/sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d exam_tutor"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  embeddings:
     build:
-      context: ./
-      dockerfile: Dockerfile
-    ports:
-      - 8000:8000
+      context: .
+      dockerfile: services/embeddings/Dockerfile
     environment:
-      - WEAVIATE_URL_VERBA=http://weaviate:8080
-      - OPENAI_API_KEY=$OPENAI_API_KEY
-      - COHERE_API_KEY=$COHERE_API_KEY
-      - OLLAMA_URL=http://host.docker.internal:11434
-      - OLLAMA_MODEL=$OLLAMA_MODEL
-      - OLLAMA_EMBED_MODEL=$OLLAMA_EMBED_MODEL
-      - UNSTRUCTURED_API_KEY=$UNSTRUCTURED_API_KEY
-      - UNSTRUCTURED_API_URL=$UNSTRUCTURED_API_URL
-      - GITHUB_TOKEN=$GITHUB_TOKEN
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-BAAI/bge-m3}
+    ports:
+      - "8001:8001"
 
-    volumes:
-      - ./data:/data/
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    env_file: .env
     depends_on:
-      weaviate:
+      db:
         condition: service_healthy
-    healthcheck:
-      test: wget --no-verbose --tries=3 --spider http://localhost:8000 || exit 1
-      interval: 5s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    networks:
-      - ollama-docker
-
-  weaviate:
-    command:
-      - --host
-      - 0.0.0.0
-      - --port
-      - '8080'
-      - --scheme
-      - http
-    image: semitechnologies/weaviate:1.25.10
+      redis:
+        condition: service_started
+      embeddings:
+        condition: service_started
     ports:
-      - 8080:8080
-      - 3000:8080
+      - "8000:8000"
     volumes:
-      - weaviate_data:/var/lib/weaviate
-    restart: on-failure:0
-    healthcheck:
-      test: wget --no-verbose --tries=3 --spider http://localhost:8080/v1/.well-known/ready || exit 1
-      interval: 5s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    environment:
-      OPENAI_APIKEY: $OPENAI_API_KEY
-      COHERE_APIKEY: $COHERE_API_KEY
-      QUERY_DEFAULTS_LIMIT: 25
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-      ENABLE_MODULES: 'e'
-      CLUSTER_HOSTNAME: 'node1'
-    networks:
-      - ollama-docker
+      - ./data:/app/data
 
-  # Uncomment to use Ollama within the same docker compose
+  worker:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      embeddings:
+        condition: service_started
+    volumes:
+      - ./data:/app/data
 
-  # ollama:
-  #     image: ollama/ollama:latest
-  #     ports:
-  #       - 7869:11434
-  #     volumes:
-  #       - .:/code
-  #       - ./ollama/ollama:/root/.ollama
-  #     container_name: ollama
-  #     pull_policy: always
-  #     tty: true
-  #     restart: always
-  #     environment:
-  #       - OLLAMA_KEEP_ALIVE=24h
-  #       - OLLAMA_HOST=0.0.0.0
-  #     networks:
-  #       - ollama-docker
+  # inference:
+  #   build:
+  #     context: .
+  #     dockerfile: services/inference/Dockerfile
+  #   environment:
+  #     - MODEL_NAME=${LLM_MODEL}
+  #   ports:
+  #     - "8002:8002"
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: [gpu]
 
 volumes:
-  weaviate_data: {}
-
-
-networks:
-  ollama-docker:
-    external: false
-  
-...
+  db_data:
